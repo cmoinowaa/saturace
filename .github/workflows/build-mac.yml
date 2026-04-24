@@ -1,0 +1,50 @@
+name: Build SATURACE Mac Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        id: cache-juce
+        uses: actions/cache@v4
+        with:
+          path: ~/JUCE
+          key: juce-8.0.4-mac
+
+      - name: Download JUCE
+        if: steps.cache-juce.outputs.cache-hit != 'true'
+        run: |
+          curl -L "https://github.com/juce-framework/JUCE/archive/refs/tags/8.0.4.zip" -o juce.zip
+          unzip juce.zip -d ~/
+          mv ~/JUCE-8.0.4 ~/JUCE
+
+      - name: Configure CMake
+        run: cmake -B build -DJUCE_DIR="$HOME/JUCE" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + AU
+        run: cmake --build build --config Release --target SATURACE_VST3
+
+      - name: Create PKG installer
+        run: |
+          mkdir -p pkg_root/Library/Audio/Plug-Ins/VST3/SATURACE.vst3
+          cp -r build/SATURACE_artefacts/Release/VST3/SATURACE.vst3/ pkg_root/Library/Audio/Plug-Ins/VST3/SATURACE.vst3/
+          pkgbuild --root pkg_root \
+                   --identifier com.nowaa.saturace \
+                   --version 1.0.0 \
+                   --install-location / \
+                   SATURACE_Mac.pkg
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SATURACE-Mac-Installer
+          path: SATURACE_Mac.pkg
