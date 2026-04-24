@@ -1,0 +1,56 @@
+name: Build SATURACE VST3 Windows Installer
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        id: cache-juce
+        uses: actions/cache@v4
+        with:
+          path: C:/JUCE
+          key: juce-7.0.12
+
+      - name: Download JUCE
+        if: steps.cache-juce.outputs.cache-hit != 'true'
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/juce-framework/JUCE/archive/refs/tags/7.0.12.zip" -OutFile "juce.zip"
+          Expand-Archive juce.zip -DestinationPath C:/
+          Rename-Item "C:/JUCE-7.0.12" "C:/JUCE"
+        shell: powershell
+
+      - name: Configure CMake
+        run: cmake -B build -DJUCE_DIR="C:/JUCE" -G "Visual Studio 17 2022" -A x64
+        shell: cmd
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target SATURACE_VST3
+        shell: cmd
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes
+        shell: cmd
+
+      - name: Prepare installer files
+        run: |
+          xcopy /Y /E /I build\SATURACE_artefacts\Release\VST3\SATURACE.vst3 installer\SATURACE.vst3\
+        shell: cmd
+
+      - name: Build installer
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\saturace_installer.iss'
+        shell: cmd
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SATURACE-Windows-Installer
+          path: installer/Output/SATURACE_Setup.exe
